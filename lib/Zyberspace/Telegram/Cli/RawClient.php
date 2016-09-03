@@ -7,7 +7,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 namespace Zyberspace\Telegram\Cli;
-
 /**
  * Raw part of the php-client for telegram-cli.
  * Takes care of the socket-connection and some helper-methods.
@@ -47,7 +46,11 @@ class RawClient
     {
         $this->_fp = stream_socket_client($remoteSocket);
         if ($this->_fp === false) {
-            throw new ClientException('Could not connect to socket "' . $remoteSocket . '"');
+            shell_exec("pkill telegram-cli; rm /tmp/tg.sck; " . $GLOBALS["homedir"] . "/tg/bin/telegram-cli --json --permanent-msg-ids -dWS /tmp/tg.sck&");
+            $this->_fp = stream_socket_client($remoteSocket);
+            if ($this->_fp === false) {
+                throw new ClientException('Could not connect to socket "' . $remoteSocket . '"');
+            }
         }
     }
 
@@ -69,10 +72,11 @@ class RawClient
     public function exec($command)
     {
         $command = implode(' ', func_get_args());
-
         fwrite($this->_fp, str_replace("\n", '\n', $command) . PHP_EOL);
 
         $answer = fgets($this->_fp); //"ANSWER $bytes" or false if an error occurred
+
+
         if (is_string($answer)) {
             if (substr($answer, 0, 7) === 'ANSWER ') {
                 $bytes = ((int) substr($answer, 7)) + 1; //+1 because the json-return seems to miss one byte
@@ -87,8 +91,8 @@ class RawClient
                         $bytesRead = strlen($jsonString);
                     } while ($bytesRead < $bytes);
 
-                    $json = json_decode($jsonString);
 
+                    $json = json_decode($jsonString);
                     if (!isset($json->error)) {
                         //Reset error-message and error-code
                         $this->_errorMessage = null;
@@ -154,6 +158,13 @@ class RawClient
      */
     public function escapePeer($peer)
     {
+        return str_replace(' ', '_', $peer);
+    }
+    public function escapeUsername($username)
+    {
+        $peer = $this->exec('resolve_username ' . $username);
+        if(!isset($peer->print_name) || $peer->print_name == "") return false;
+	$peer = $peer->print_name;
         return str_replace(' ', '_', $peer);
     }
 
